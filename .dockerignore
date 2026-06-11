@@ -1,0 +1,12 @@
+node_modules
+dist
+.git
+.gitignore
+.trae
+.trae-preflight.json
+README.md
+README.preflight.md
+scripts
+.env
+*.log
+npm-debug.log*

@@ -1,0 +1,77 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand-yellow: #F59E0B;
+  --brand-navy: #1E3A5F;
+  --brand-red: #DC2626;
+  --brand-green: #16A34A;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  background-attachment: fixed;
+  color: #0f172a;
+  -webkit-font-smoothing: antialiased;
+}
+
+@keyframes breathe {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
+  50% { opacity: 0.9; box-shadow: 0 0 0 8px rgba(220, 38, 38, 0); }
+}
+
+.animate-breathe {
+  animation: breathe 1.5s ease-in-out infinite;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slide-in {
+  animation: slideIn 0.35s ease-out both;
+}
+
+@keyframes stampIn {
+  0% { opacity: 0; transform: scale(2) rotate(-15deg); }
+  60% { opacity: 1; transform: scale(1.1) rotate(5deg); }
+  100% { opacity: 1; transform: scale(1) rotate(-8deg); }
+}
+
+.animate-stamp {
+  animation: stampIn 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+@keyframes checkPop {
+  0% { opacity: 0; transform: scale(0.3) rotate(-45deg); }
+  60% { opacity: 1; transform: scale(1.2) rotate(10deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+
+.animate-check {
+  animation: checkPop 0.5s ease-out both;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: #f1f5f9; }
+::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+.font-mono-num {
+  font-variant-numeric: tabular-nums;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.industrial-pattern {
+  background-image:
+    linear-gradient(135deg, rgba(30, 58, 95, 0.03) 0%, transparent 50%),
+    repeating-linear-gradient(45deg, transparent, transparent 20px, rgba(245, 158, 11, 0.03) 20px, rgba(245, 158, 11, 0.03) 40px);
+}
