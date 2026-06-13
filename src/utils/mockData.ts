@@ -1,5 +1,4 @@
 import type { Team, Worker, Settings } from '@/types';
-import { genId } from './date';
 
 const now = new Date().toISOString();
 
@@ -26,27 +25,19 @@ const avatars = [
 ];
 
 const workerData = [
-  { team_id: 'team-001', name: '王大伟', work_type: '钢筋工' },
-  { team_id: 'team-001', name: '刘强', work_type: '木工' },
-  { team_id: 'team-001', name: '陈铁柱', work_type: '架子工' },
-  { team_id: 'team-001', name: '赵海涛', work_type: '瓦工' },
-  { team_id: 'team-001', name: '孙志勇', work_type: '普工' },
-  { team_id: 'team-002', name: '周明', work_type: '电工' },
-  { team_id: 'team-002', name: '吴建华', work_type: '焊工' },
-  { team_id: 'team-002', name: '郑辉', work_type: '管道工' },
-  { team_id: 'team-002', name: '马超', work_type: '机械操作工' },
-  { team_id: 'team-002', name: '黄鹏', work_type: '电工' },
+  { id: 'wrk-001', team_id: 'team-001', name: '王大伟', work_type: '钢筋工', id_card: '110101199001011234', phone: '13800138001', avatar: '👷' },
+  { id: 'wrk-002', team_id: 'team-001', name: '刘强', work_type: '木工', id_card: '110101199002022345', phone: '13800138002', avatar: '👷‍♂️' },
+  { id: 'wrk-003', team_id: 'team-001', name: '陈铁柱', work_type: '架子工', id_card: '110101198803033456', phone: '13800138003', avatar: '👷‍♀️' },
+  { id: 'wrk-004', team_id: 'team-001', name: '赵海涛', work_type: '瓦工', id_card: '110101198904044567', phone: '13800138004', avatar: '🧑‍🏭' },
+  { id: 'wrk-005', team_id: 'team-001', name: '孙志勇', work_type: '普工', id_card: '110101199105055678', phone: '13800138005', avatar: '👨‍🔧' },
+  { id: 'wrk-006', team_id: 'team-002', name: '周明', work_type: '电工', id_card: '110101198706066789', phone: '13900139006', avatar: '🧔' },
+  { id: 'wrk-007', team_id: 'team-002', name: '吴建华', work_type: '焊工', id_card: '110101198607077890', phone: '13900139007', avatar: '👨‍🦱' },
+  { id: 'wrk-008', team_id: 'team-002', name: '郑辉', work_type: '管道工', id_card: '110101198508088901', phone: '13900139008', avatar: '👩‍🦰' },
+  { id: 'wrk-009', team_id: 'team-002', name: '马超', work_type: '机械操作工', id_card: '110101198409099012', phone: '13900139009', avatar: '🧑' },
+  { id: 'wrk-010', team_id: 'team-002', name: '黄鹏', work_type: '电工', id_card: '110101198510100123', phone: '13900139010', avatar: '👨‍🦳' },
 ];
 
-export const initialWorkers: Worker[] = workerData.map((w, i) => ({
-  id: genId('wrk-'),
-  team_id: w.team_id,
-  name: w.name,
-  work_type: w.work_type,
-  id_card: `110101198${i % 10}${String(1000 + i).slice(-4)}${String(100 + i).slice(-3)}`,
-  phone: `139${String(10000000 + i * 137).slice(-8)}`,
-  avatar: avatars[i % avatars.length],
-}));
+export const initialWorkers: Worker[] = workerData as Worker[];
 
 export const initialSettings: Settings = {
   lateThreshold: 10,
