@@ -98,6 +98,8 @@ function computeAlerts(
     const meetingWorkStatuses = workStatuses.filter((ws) => ws.meeting_id === meeting.id);
     const meetingHazards = hazards.filter((h) => h.meeting_id === meeting.id);
 
+    const meetingWorkFaces = meeting.work_face_ids ?? [];
+
     for (const si of meetingSignIns) {
       if (selectedTeamId && si.team_id !== selectedTeamId) continue;
 
@@ -129,17 +131,69 @@ function computeAlerts(
         });
       }
 
-      const relevantBriefings = meetingBriefings.filter((b) => {
-        const wfIds = b.work_face_ids;
-        if (!wfIds || wfIds.length === 0) return true;
-        return wfIds.includes(si.work_face_id);
-      });
+      // ——— 危险作业 × 作业面 × 已签到工人 三维检查 ———
+      for (const opKey of meeting.dangerous_ops) {
+        const opLabel = DANGEROUS_OPS.find((o) => o.key === opKey)?.label ?? opKey;
 
-      for (const b of relevantBriefings) {
-        const confirms = getConfirmsByBriefing(b.id);
-        const confirmed = confirms.some((c) => c.worker_id === si.worker_id);
+        // 1. 找出该晨会下 opKey 对应的所有 Briefing
+        const opBriefings = meetingBriefings.filter((b) => b.op_type === opKey);
+
+        // 1A. 该危险作业根本未建任何交底 —— 所有已签到工人都要预警
+        if (opBriefings.length === 0) {
+          // 如果晨会限定了作业面，还要检查工人作业面是否在该晨会作业面里（避免跨作业面误报）
+          const workerInMeetingWorkFace =
+            meetingWorkFaces.length === 0 || meetingWorkFaces.includes(si.work_face_id);
+          if (workerInMeetingWorkFace) {
+            signedNotBriefed.push({
+              type: 'signed_not_briefed',
+              worker_id: si.worker_id,
+              worker_name: worker.name,
+              team_id: si.team_id,
+              team_name: team?.name ?? '-',
+              work_face_id: si.work_face_id,
+              detail: `已签到但未创建「${opLabel}」专项交底`,
+            });
+          }
+          continue;
+        }
+
+        // 2. 已建交底：判断该工人的作业面是否被覆盖 + 是否签字
+        // 2A. 从该 opKey 的所有 Briefing 中，找出覆盖工人作业面的那一批
+        const coveredBriefings = opBriefings.filter((b) => {
+          const wfIds = b.work_face_ids ?? [];
+          // 交底未限定作业面 = 全量覆盖；限定了就必须包含该工人的作业面
+          if (wfIds.length === 0) return true;
+          return wfIds.includes(si.work_face_id);
+        });
+
+        // 2B. 作业面未被任何一条交底覆盖 —— 该作业面上的工人仍要预警
+        if (coveredBriefings.length === 0) {
+          const workerInMeetingWorkFace =
+            meetingWorkFaces.length === 0 || meetingWorkFaces.includes(si.work_face_id);
+          if (workerInMeetingWorkFace) {
+            signedNotBriefed.push({
+              type: 'signed_not_briefed',
+              worker_id: si.worker_id,
+              worker_name: worker.name,
+              team_id: si.team_id,
+              team_name: team?.name ?? '-',
+              work_face_id: si.work_face_id,
+              detail: `已创建「${opLabel}」交底但未覆盖该作业面`,
+            });
+          }
+          continue;
+        }
+
+        // 2C. 作业面被覆盖 —— 检查工人是否至少完成其中一条的签字
+        let confirmed = false;
+        for (const b of coveredBriefings) {
+          const cs = getConfirmsByBriefing(b.id);
+          if (cs.some((c) => c.worker_id === si.worker_id)) {
+            confirmed = true;
+            break;
+          }
+        }
         if (!confirmed) {
-          const opLabel = DANGEROUS_OPS.find((o) => o.key === b.op_type)?.label ?? b.op_type;
           signedNotBriefed.push({
             type: 'signed_not_briefed',
             worker_id: si.worker_id,
@@ -147,17 +201,21 @@ function computeAlerts(
             team_id: si.team_id,
             team_name: team?.name ?? '-',
             work_face_id: si.work_face_id,
-            detail: `已签到但未确认「${opLabel}」交底`,
+            detail: `已建「${opLabel}」交底但未签字确认`,
           });
         }
       }
 
-      const confirmedBriefings = meetingBriefings.filter((b) => {
-        const confirms = getConfirmsByBriefing(b.id);
-        return confirms.some((c) => c.worker_id === si.worker_id);
-      });
-
-      if (confirmedBriefings.length > 0) {
+      // ——— 已交底未上岗：只要确认过任意一条交底，就视为"已交底" ———
+      let anyBriefingConfirmed = false;
+      for (const b of meetingBriefings) {
+        const cs = getConfirmsByBriefing(b.id);
+        if (cs.some((c) => c.worker_id === si.worker_id)) {
+          anyBriefingConfirmed = true;
+          break;
+        }
+      }
+      if (anyBriefingConfirmed) {
         const onDuty = meetingWorkStatuses.some(
           (ws) => ws.worker_id === si.worker_id && ws.status === 'on_duty',
         );
