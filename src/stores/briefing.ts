@@ -10,9 +10,12 @@ interface BriefingState {
   briefingConfirms: BriefingConfirm[];
   addBriefing: (data: Omit<Briefing, 'id' | 'brief_time'>) => Briefing;
   deleteBriefing: (id: string) => void;
+  bindHazard: (briefingId: string, hazardId: string) => void;
+  unbindHazard: (briefingId: string, hazardId: string) => void;
   confirmBriefing: (briefingId: string, workerId: string) => void;
   unconfirmBriefing: (briefingId: string, workerId: string) => void;
   getBriefingsByMeeting: (meetingId: string) => Briefing[];
+  getBriefingsByWorkFace: (meetingId: string, workFaceId: string) => Briefing[];
   getConfirmsByBriefing: (briefingId: string) => BriefingConfirm[];
   hasConfirmed: (briefingId: string, workerId: string) => boolean;
   getConfirmedWorkers: (briefingId: string) => Worker[];
@@ -41,6 +44,24 @@ export const useBriefingStore = create<BriefingState>()(
           briefingConfirms: state.briefingConfirms.filter((c) => c.briefing_id !== id),
         })),
 
+      bindHazard: (briefingId, hazardId) =>
+        set((state) => ({
+          briefings: state.briefings.map((b) =>
+            b.id === briefingId
+              ? { ...b, hazard_ids: [...(b.hazard_ids ?? []), hazardId] }
+              : b,
+          ),
+        })),
+
+      unbindHazard: (briefingId, hazardId) =>
+        set((state) => ({
+          briefings: state.briefings.map((b) =>
+            b.id === briefingId
+              ? { ...b, hazard_ids: (b.hazard_ids ?? []).filter((h) => h !== hazardId) }
+              : b,
+          ),
+        })),
+
       confirmBriefing: (briefingId, workerId) => {
         if (get().hasConfirmed(briefingId, workerId)) return;
         set((state) => ({
@@ -66,6 +87,11 @@ export const useBriefingStore = create<BriefingState>()(
       getBriefingsByMeeting: (meetingId) =>
         get().briefings.filter((b) => b.meeting_id === meetingId),
 
+      getBriefingsByWorkFace: (meetingId, workFaceId) =>
+        get().briefings.filter(
+          (b) => b.meeting_id === meetingId && (b.work_face_ids ?? []).includes(workFaceId),
+        ),
+
       getConfirmsByBriefing: (briefingId) =>
         get().briefingConfirms.filter((c) => c.briefing_id === briefingId),
 
@@ -85,7 +111,14 @@ export const useBriefingStore = create<BriefingState>()(
       isDangerousOpsCompleted: (meetingId) => {
         const meeting = useMeetingStore.getState().getMeetingById(meetingId);
         if (!meeting) return { completed: true, missing: [], notFull: [] };
-        const workers = useTeamStore.getState().getWorkersByTeam(meeting.team_id);
+        const allWorkers: Worker[] = [];
+        for (const tid of meeting.team_ids) {
+          allWorkers.push(...useTeamStore.getState().getWorkersByTeam(tid));
+        }
+        const tempWorkers = (meeting.temp_worker_ids ?? [])
+          .map((wid) => useTeamStore.getState().getWorkerById(wid))
+          .filter(Boolean) as Worker[];
+        const workers = [...allWorkers, ...tempWorkers];
         const briefings = get().getBriefingsByMeeting(meetingId);
         const missing: string[] = [];
         const notFull: { op: string; missingWorkers: Worker[] }[] = [];

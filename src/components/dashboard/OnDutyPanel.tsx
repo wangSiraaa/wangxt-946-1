@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ShieldCheck, AlertTriangle, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { Meeting, ValidationResult } from '@/types';
+import { useTeamStore } from '@/stores/team';
 
 interface Props {
   meeting?: Meeting;
@@ -14,6 +15,7 @@ type CheckItem = { label: string; pass: boolean };
 
 export function OnDutyPanel({ meeting, onValidate, onEndMeeting, disabled }: Props) {
   const navigate = useNavigate();
+  const getTeamById = useTeamStore((s) => s.getTeamById);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ValidationResult | null>(null);
   const [checks, setChecks] = useState<CheckItem[]>([]);
@@ -81,7 +83,7 @@ export function OnDutyPanel({ meeting, onValidate, onEndMeeting, disabled }: Pro
 
       <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 mb-4 border border-white/10">
         <p className="text-sm mb-1"><span className="text-white/70">晨会：</span>{meeting.title}</p>
-        <p className="text-sm mb-1"><span className="text-white/70">班组：</span>{meeting.team_id}</p>
+        <p className="text-sm mb-1"><span className="text-white/70">班组：</span>{meeting.team_ids.map((tid) => getTeamById(tid)?.name ?? tid).join(', ')}</p>
         <p className="text-sm">
           <span className="text-white/70">危险作业：</span>
           {meeting.dangerous_ops.length === 0 ? (

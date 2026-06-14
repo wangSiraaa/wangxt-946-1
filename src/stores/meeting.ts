@@ -10,8 +10,10 @@ interface MeetingState {
   updateMeeting: (id: string, data: Partial<Meeting>) => void;
   endMeeting: (id: string) => void;
   setCurrentMeeting: (id: string | null) => void;
-  getTodayMeeting: (teamId?: string) => Meeting | undefined;
+  getTodayMeetings: (teamId?: string) => Meeting[];
+  getMeetingsByDate: (date: string, teamId?: string) => Meeting[];
   getMeetingById: (id: string) => Meeting | undefined;
+  getTodayMeeting: (teamId?: string) => Meeting | undefined;
 }
 
 export const useMeetingStore = create<MeetingState>()(
@@ -50,16 +52,33 @@ export const useMeetingStore = create<MeetingState>()(
 
       setCurrentMeeting: (id) => set({ currentMeetingId: id }),
 
+      getTodayMeetings: (teamId) => {
+        const today = formatDate(new Date());
+        const list = get().meetings.filter((m) => m.date === today);
+        if (teamId) {
+          return list.filter((m) => m.team_ids.includes(teamId));
+        }
+        return list;
+      },
+
+      getMeetingsByDate: (date, teamId) => {
+        const list = get().meetings.filter((m) => m.date === date);
+        if (teamId) {
+          return list.filter((m) => m.team_ids.includes(teamId));
+        }
+        return list;
+      },
+
+      getMeetingById: (id) => get().meetings.find((m) => m.id === id),
+
       getTodayMeeting: (teamId) => {
         const today = formatDate(new Date());
         const list = get().meetings.filter((m) => m.date === today);
         if (teamId) {
-          return list.find((m) => m.team_id === teamId) ?? list[0];
+          return list.find((m) => m.team_ids.includes(teamId)) ?? list[0];
         }
         return list[0];
       },
-
-      getMeetingById: (id) => get().meetings.find((m) => m.id === id),
     }),
     { name: 'site-board:meeting' },
   ),

@@ -1,18 +1,26 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileWarning, Plus, Trash2, Edit3, Save, ArrowLeft, CheckCircle2, AlertTriangle, AlertCircle } from 'lucide-react';
+import { FileWarning, Plus, Trash2, Edit3, Save, ArrowLeft, CheckCircle2, AlertTriangle, AlertCircle, Link2, ClipboardCheck, XCircle, MapPin } from 'lucide-react';
 import { useMeetingStore } from '@/stores/meeting';
 import { useHazardStore } from '@/stores/hazard';
+import { useBriefingStore } from '@/stores/briefing';
 import { useTeamStore } from '@/stores/team';
+import { useWorkFaceStore } from '@/stores/workFace';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { EmptyState } from '@/components/common/EmptyState';
-import { HAZARD_TYPES, type HazardLevel, type HazardStatus, type Hazard } from '@/types';
+import { HAZARD_TYPES, type HazardLevel, type HazardStatus, type HazardReviewStatus, type Hazard } from '@/types';
 import { formatDate } from '@/utils/date';
 
 const LEVEL_STYLES: Record<HazardLevel, { label: string; cls: string; icon: any }> = {
   low: { label: '低危', cls: 'bg-sky-100 text-sky-700 border-sky-300', icon: AlertCircle },
   medium: { label: '中危', cls: 'bg-amber-100 text-amber-700 border-amber-400', icon: AlertTriangle },
   high: { label: '高危', cls: 'bg-red-100 text-red-700 border-red-400', icon: AlertTriangle },
+};
+
+const REVIEW_STYLES: Record<HazardReviewStatus, { label: string; cls: string; icon: any }> = {
+  pending: { label: '待复核', cls: 'bg-amber-100 text-amber-700 border-amber-300', icon: ClipboardCheck },
+  passed: { label: '复核通过', cls: 'bg-green-100 text-green-700 border-green-300', icon: CheckCircle2 },
+  failed: { label: '复核不通过', cls: 'bg-red-100 text-red-700 border-red-300', icon: XCircle },
 };
 
 interface FormState {
@@ -25,6 +33,7 @@ interface FormState {
   rectifier: string;
   deadline: string;
   status: HazardStatus;
+  work_face_id: string;
 }
 
 const EMPTY: FormState = {
@@ -36,6 +45,7 @@ const EMPTY: FormState = {
   rectifier: '',
   deadline: formatDate(new Date(Date.now() + 3 * 86400000)),
   status: 'pending',
+  work_face_id: '',
 };
 
 export default function HazardPage() {
@@ -48,21 +58,35 @@ export default function HazardPage() {
   const update = useHazardStore((s) => s.updateHazard);
   const remove = useHazardStore((s) => s.deleteHazard);
   const updateStatus = useHazardStore((s) => s.updateHazardStatus);
+  const reviewHazard = useHazardStore((s) => s.reviewHazard);
+  const bindBriefing = useHazardStore((s) => s.bindBriefing);
+  const bindHazardToBriefing = useBriefingStore((s) => s.bindHazard);
+  const getBriefingsByMeeting = useBriefingStore((s) => s.getBriefingsByMeeting);
+  const briefingData = useBriefingStore((s) => s.briefings);
   const workerList = useTeamStore((s) => s.workers);
   const getWorkersByTeam = useTeamStore((s) => s.getWorkersByTeam);
+  const workFaces = useWorkFaceStore((s) => s.workFaces);
 
   const meeting = useMemo(() => getTodayMeeting(), [getTodayMeeting, meetingData]);
   const list = useMemo(
     () => (meeting ? getHazardsByMeeting(meeting.id) : []),
     [meeting, getHazardsByMeeting, allHazards],
   );
-  const workers = useMemo(
-    () => (meeting ? getWorkersByTeam(meeting.team_id) : []),
-    [meeting, getWorkersByTeam, workerList],
+  const workers = useMemo(() => {
+    if (!meeting) return [];
+    return meeting.team_ids.flatMap((tid) => getWorkersByTeam(tid));
+  }, [meeting, getWorkersByTeam, workerList]);
+
+  const meetingBriefings = useMemo(
+    () => (meeting ? getBriefingsByMeeting(meeting.id) : []),
+    [meeting, getBriefingsByMeeting, briefingData],
   );
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY);
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [reviewNote, setReviewNote] = useState('');
+  const [linkingHazardId, setLinkingHazardId] = useState<string | null>(null);
 
   const openAdd = () => {
     setForm(EMPTY);
@@ -79,6 +103,7 @@ export default function HazardPage() {
       rectifier: h.rectifier,
       deadline: h.deadline,
       status: h.status,
+      work_face_id: h.work_face_id ?? '',
     });
     setShowForm(true);
   };
@@ -97,6 +122,7 @@ export default function HazardPage() {
         rectifier: form.rectifier,
         deadline: form.deadline,
         status: form.status,
+        work_face_id: form.work_face_id || undefined,
       });
     } else {
       add({
@@ -109,10 +135,23 @@ export default function HazardPage() {
         rectifier: form.rectifier,
         deadline: form.deadline,
         status: form.status,
+        work_face_id: form.work_face_id || undefined,
       });
     }
     setShowForm(false);
     setForm(EMPTY);
+  };
+
+  const handleReview = (id: string, reviewStatus: HazardReviewStatus) => {
+    reviewHazard(id, reviewStatus, '安全员', reviewNote.trim() || undefined);
+    setReviewingId(null);
+    setReviewNote('');
+  };
+
+  const handleLinkBriefing = (hazardId: string, briefingId: string) => {
+    bindBriefing(hazardId, briefingId);
+    bindHazardToBriefing(briefingId, hazardId);
+    setLinkingHazardId(null);
   };
 
   return (
@@ -210,6 +249,20 @@ export default function HazardPage() {
               />
             </div>
             <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                <MapPin className="w-4 h-4 inline mr-1" />
+                作业面
+              </label>
+              <select
+                value={form.work_face_id}
+                onChange={(e) => setForm({ ...form, work_face_id: e.target.value })}
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400 bg-white"
+              >
+                <option value="">未指定</option>
+                {workFaces.map((wf) => <option key={wf.id} value={wf.id}>{wf.name}{wf.location ? ` (${wf.location})` : ''}</option>)}
+              </select>
+            </div>
+            <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1.5">整改责任人 *</label>
               <select
                 required
@@ -271,6 +324,12 @@ export default function HazardPage() {
           {list.map((h, idx) => {
             const info = LEVEL_STYLES[h.level];
             const Icon = info.icon;
+            const reviewInfo = h.review_status ? REVIEW_STYLES[h.review_status] : null;
+            const linkedBriefing = h.briefing_id ? meetingBriefings.find((b) => b.id === h.briefing_id) : null;
+            const hazardWorkFace = h.work_face_id ? workFaces.find((wf) => wf.id === h.work_face_id) : null;
+            const isReviewing = reviewingId === h.id;
+            const isLinking = linkingHazardId === h.id;
+
             return (
               <div
                 key={h.id}
@@ -290,18 +349,103 @@ export default function HazardPage() {
                         <span className="text-xs text-slate-500">📍 {h.location}</span>
                         <span className={`inline-flex px-2 py-0.5 rounded text-xs font-semibold border ${info.cls}`}>{info.label}</span>
                         <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">{h.type}</span>
+                        {hazardWorkFace && (
+                          <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-xs font-medium bg-indigo-50 text-indigo-600 border border-indigo-200">
+                            <MapPin className="w-3 h-3" />{hazardWorkFace.name}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
-                  <StatusBadge status={h.status} type="hazard-status" />
+                  <div className="flex flex-col items-end gap-1">
+                    <StatusBadge status={h.status} type="hazard-status" />
+                    {reviewInfo && (
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold border ${reviewInfo.cls}`}>
+                        <reviewInfo.icon className="w-3 h-3" />{reviewInfo.label}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 {h.description && <p className="text-sm text-slate-600 mb-3 whitespace-pre-line bg-slate-50 rounded-md p-3">{h.description}</p>}
+
+                {linkedBriefing && (
+                  <div className="mb-3 flex items-center gap-2 text-xs bg-purple-50 rounded-md px-3 py-2 border border-purple-100">
+                    <Link2 className="w-3.5 h-3.5 text-purple-500" />
+                    <span className="text-slate-600">关联交底：</span>
+                    <span className="font-semibold text-purple-700">{linkedBriefing.op_type} - {linkedBriefing.briefer}</span>
+                  </div>
+                )}
+
+                {isLinking && (
+                  <div className="mb-3 bg-purple-50/50 border border-purple-200 rounded-lg p-3 space-y-2">
+                    <p className="text-xs font-semibold text-slate-600">选择交底记录进行关联：</p>
+                    {meetingBriefings.length > 0 ? (
+                      meetingBriefings.map((b) => (
+                        <button
+                          key={b.id}
+                          type="button"
+                          onClick={() => handleLinkBriefing(h.id, b.id)}
+                          className="w-full text-left px-3 py-2 rounded-md border border-slate-200 bg-white hover:bg-purple-50 text-sm transition flex items-center justify-between"
+                        >
+                          <span className="font-medium text-slate-700">{b.op_type} - {b.briefer}</span>
+                          <Link2 className="w-4 h-4 text-purple-400" />
+                        </button>
+                      ))
+                    ) : (
+                      <p className="text-xs text-slate-400 text-center py-1">当前晨会无交底记录</p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setLinkingHazardId(null)}
+                      className="text-xs text-slate-500 hover:text-slate-700"
+                    >
+                      取消
+                    </button>
+                  </div>
+                )}
+
+                {isReviewing && (
+                  <div className="mb-3 bg-amber-50/50 border border-amber-200 rounded-lg p-3 space-y-2">
+                    <p className="text-xs font-semibold text-slate-600">隐患复核（当前状态：已整改）</p>
+                    <textarea
+                      rows={2}
+                      value={reviewNote}
+                      onChange={(e) => setReviewNote(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400"
+                      placeholder="复核备注（可选）..."
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleReview(h.id, 'passed')}
+                        className="px-3 py-1.5 rounded-md bg-green-100 text-green-700 text-xs font-semibold hover:bg-green-200 inline-flex items-center gap-1"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />通过
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleReview(h.id, 'failed')}
+                        className="px-3 py-1.5 rounded-md bg-red-100 text-red-700 text-xs font-semibold hover:bg-red-200 inline-flex items-center gap-1"
+                      >
+                        <XCircle className="w-3.5 h-3.5" />不通过
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setReviewingId(null); setReviewNote(''); }}
+                        className="px-3 py-1.5 rounded-md text-slate-500 text-xs hover:bg-slate-100"
+                      >
+                        取消
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between flex-wrap gap-2 pt-3 border-t border-slate-100">
                   <div className="text-xs text-slate-500 space-y-0.5">
                     <p>整改责任人：<span className="font-semibold text-slate-700">{h.rectifier}</span></p>
                     <p>截止日期：<span className="font-mono-num">{h.deadline}</span></p>
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     {h.status !== 'resolved' && (
                       <button
                         onClick={() => updateStatus(h.id, h.status === 'pending' ? 'rectifying' : 'resolved')}
@@ -309,6 +453,22 @@ export default function HazardPage() {
                       >
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         {h.status === 'pending' ? '开始整改' : '标记整改完成'}
+                      </button>
+                    )}
+                    {h.status === 'resolved' && (!h.review_status || h.review_status === 'pending') && (
+                      <button
+                        onClick={() => setReviewingId(h.id)}
+                        className="px-3 py-1.5 rounded-md bg-amber-50 text-amber-700 text-xs font-semibold hover:bg-amber-100 inline-flex items-center gap-1"
+                      >
+                        <ClipboardCheck className="w-3.5 h-3.5" />复核
+                      </button>
+                    )}
+                    {!h.briefing_id && (
+                      <button
+                        onClick={() => setLinkingHazardId(h.id)}
+                        className="px-3 py-1.5 rounded-md bg-purple-50 text-purple-700 text-xs font-semibold hover:bg-purple-100 inline-flex items-center gap-1"
+                      >
+                        <Link2 className="w-3.5 h-3.5" />关联交底
                       </button>
                     )}
                     <button onClick={() => openEdit(h)} className="p-1.5 rounded-md text-slate-500 hover:bg-slate-100"><Edit3 className="w-4 h-4" /></button>

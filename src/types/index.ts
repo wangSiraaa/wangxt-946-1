@@ -16,15 +16,25 @@ export interface Worker {
   avatar: string;
 }
 
+export interface WorkFace {
+  id: string;
+  name: string;
+  location: string;
+  description?: string;
+  created_at: string;
+}
+
 export type MeetingStatus = 'pending' | 'ongoing' | 'ended';
 
 export interface Meeting {
   id: string;
-  team_id: string;
+  team_ids: string[];
   date: string;
   title: string;
   work_content: string;
   dangerous_ops: string[];
+  work_face_ids: string[];
+  temp_worker_ids: string[];
   status: MeetingStatus;
   created_at: string;
   start_time: string;
@@ -32,23 +42,53 @@ export interface Meeting {
 }
 
 export type SignInStatus = 'normal' | 'late' | 'absent';
+export type SignInReviewStatus = 'not_required' | 'pending' | 'approved' | 'rejected';
 
 export interface SignIn {
   id: string;
   meeting_id: string;
   worker_id: string;
+  team_id: string;
+  work_face_id: string;
   sign_time: string;
   status: SignInStatus;
   late_minutes: number;
+  late_reason?: string;
+  is_makeup: boolean;
+  review_status: SignInReviewStatus;
+  review_note?: string;
+  reviewer?: string;
+  review_time?: string;
   remark?: string;
+}
+
+export type TransferStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
+
+export interface TransferRequest {
+  id: string;
+  date: string;
+  from_team_id: string;
+  to_team_id: string;
+  worker_id: string;
+  reason: string;
+  work_face_id?: string;
+  status: TransferStatus;
+  requester: string;
+  approver?: string;
+  approver_note?: string;
+  created_at: string;
+  approved_at?: string;
 }
 
 export type HazardLevel = 'low' | 'medium' | 'high';
 export type HazardStatus = 'pending' | 'rectifying' | 'resolved';
+export type HazardReviewStatus = 'pending' | 'passed' | 'failed';
 
 export interface Hazard {
   id: string;
   meeting_id: string;
+  work_face_id?: string;
+  briefing_id?: string;
   title: string;
   type: string;
   level: HazardLevel;
@@ -57,6 +97,12 @@ export interface Hazard {
   rectifier: string;
   deadline: string;
   status: HazardStatus;
+  review_status?: HazardReviewStatus;
+  review_note?: string;
+  reviewer?: string;
+  review_time?: string;
+  rectify_description?: string;
+  rectify_time?: string;
 }
 
 export interface Briefing {
@@ -66,6 +112,8 @@ export interface Briefing {
   content: string;
   briefer: string;
   brief_time: string;
+  work_face_ids?: string[];
+  hazard_ids?: string[];
 }
 
 export interface BriefingConfirm {
@@ -81,6 +129,8 @@ export interface WorkStatus {
   id: string;
   meeting_id: string;
   worker_id: string;
+  team_id: string;
+  work_face_id: string;
   status: WorkStatusState;
   marked_at: string;
 }
@@ -111,4 +161,14 @@ export const HAZARD_TYPES = [
 export interface ValidationResult {
   success: boolean;
   errors: string[];
+}
+
+export interface DashboardAlert {
+  type: 'signed_not_briefed' | 'briefed_not_onduty' | 'hazard_unclosed' | 'late_anomaly' | 'makeup_pending';
+  worker_id: string;
+  worker_name: string;
+  team_id: string;
+  team_name: string;
+  work_face_id?: string;
+  detail: string;
 }

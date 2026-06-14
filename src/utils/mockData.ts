@@ -1,4 +1,4 @@
-import type { Team, Worker, Settings } from '@/types';
+import type { Team, Worker, Settings, WorkFace } from '@/types';
 
 const now = new Date().toISOString();
 
@@ -17,11 +17,27 @@ export const initialTeams: Team[] = [
     description: '负责电气、给排水、暖通、消防系统安装作业',
     created_at: now,
   },
+  {
+    id: 'team-003',
+    name: '装饰装修班',
+    leader_name: '王大明',
+    description: '负责内外墙装饰、地面铺装、门窗安装',
+    created_at: now,
+  },
+];
+
+export const initialWorkFaces: WorkFace[] = [
+  { id: 'wf-001', name: '1号楼基坑', location: 'A区北侧', description: '深基坑开挖及支护作业面', created_at: now },
+  { id: 'wf-002', name: '2号楼主体结构', location: 'B区中部', description: '框架结构施工，含高处作业', created_at: now },
+  { id: 'wf-003', name: '地下室机电管线', location: 'A区地下1层', description: '消防、暖通、给排水管线安装', created_at: now },
+  { id: 'wf-004', name: '3号楼屋面', location: 'C区顶层', description: '屋面防水及保温施工', created_at: now },
+  { id: 'wf-005', name: '外立面脚手架', location: 'B区外围', description: '落地式及悬挑式脚手架搭设', created_at: now },
 ];
 
 const avatars = [
   '👷', '👷‍♂️', '👷‍♀️', '🧑‍🏭', '👨‍🔧',
   '🧔', '👨‍🦱', '👩‍🦰', '🧑', '👨‍🦳',
+  '👩', '🧓', '👷', '👷‍♂️', '👷‍♀️',
 ];
 
 const workerData = [
@@ -35,6 +51,11 @@ const workerData = [
   { id: 'wrk-008', team_id: 'team-002', name: '郑辉', work_type: '管道工', id_card: '110101198508088901', phone: '13900139008', avatar: '👩‍🦰' },
   { id: 'wrk-009', team_id: 'team-002', name: '马超', work_type: '机械操作工', id_card: '110101198409099012', phone: '13900139009', avatar: '🧑' },
   { id: 'wrk-010', team_id: 'team-002', name: '黄鹏', work_type: '电工', id_card: '110101198510100123', phone: '13900139010', avatar: '👨‍🦳' },
+  { id: 'wrk-011', team_id: 'team-003', name: '钱进', work_type: '抹灰工', id_card: '110101199211111234', phone: '13900139011', avatar: '👩' },
+  { id: 'wrk-012', team_id: 'team-003', name: '韩磊', work_type: '瓦工', id_card: '110101199312122345', phone: '13900139012', avatar: '🧓' },
+  { id: 'wrk-013', team_id: 'team-003', name: '冯涛', work_type: '普工', id_card: '110101199013133456', phone: '13900139013', avatar: '👷' },
+  { id: 'wrk-014', team_id: 'team-001', name: '许强', work_type: '钢筋工', id_card: '110101198814144567', phone: '13900139014', avatar: '👷‍♂️' },
+  { id: 'wrk-015', team_id: 'team-002', name: '蒋明', work_type: '焊工', id_card: '110101198715155678', phone: '13900139015', avatar: '👷‍♀️' },
 ];
 
 export const initialWorkers: Worker[] = workerData as Worker[];

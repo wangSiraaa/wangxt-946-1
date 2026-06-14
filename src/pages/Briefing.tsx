@@ -1,9 +1,11 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldCheck, Plus, Trash2, ArrowLeft, CheckCircle2, Stamp, UserCheck, FileText } from 'lucide-react';
+import { ShieldCheck, Plus, Trash2, ArrowLeft, CheckCircle2, Stamp, UserCheck, FileText, Link2, Unlink, MapPin } from 'lucide-react';
 import { useMeetingStore } from '@/stores/meeting';
 import { useTeamStore } from '@/stores/team';
 import { useBriefingStore } from '@/stores/briefing';
+import { useHazardStore } from '@/stores/hazard';
+import { useWorkFaceStore } from '@/stores/workFace';
 import { EmptyState } from '@/components/common/EmptyState';
 import { DANGEROUS_OPS, type Briefing } from '@/types';
 import { briefingTemplates } from '@/utils/mockData';
@@ -26,17 +28,32 @@ export default function BriefingPage() {
   const unconfirm = useBriefingStore((s) => s.unconfirmBriefing);
   const hasConfirmed = useBriefingStore((s) => s.hasConfirmed);
   const getConfirmedWorkers = useBriefingStore((s) => s.getConfirmedWorkers);
+  const bindHazard = useBriefingStore((s) => s.bindHazard);
+  const unbindHazard = useBriefingStore((s) => s.unbindHazard);
+  const allHazards = useHazardStore((s) => s.hazards);
+  const getHazardsByMeeting = useHazardStore((s) => s.getHazardsByMeeting);
+  const hazardBindBriefing = useHazardStore((s) => s.bindBriefing);
   const workerData = useTeamStore((s) => s.workers);
   const getWorkersByTeam = useTeamStore((s) => s.getWorkersByTeam);
+  const workFaces = useWorkFaceStore((s) => s.workFaces);
 
   const meeting = useMemo(() => getTodayMeeting(), [getTodayMeeting, meetingData]);
   const list = useMemo(() => (meeting ? getBriefingsByMeeting(meeting.id) : []), [meeting, getBriefingsByMeeting, briefingData]);
-  const workers = useMemo(() => (meeting ? getWorkersByTeam(meeting.team_id) : []), [meeting, getWorkersByTeam, workerData]);
+  const workers = useMemo(() => {
+    if (!meeting) return [];
+    return meeting.team_ids.flatMap((tid) => getWorkersByTeam(tid));
+  }, [meeting, getWorkersByTeam, workerData]);
+
+  const meetingHazards = useMemo(
+    () => (meeting ? getHazardsByMeeting(meeting.id) : []),
+    [meeting, getHazardsByMeeting, allHazards],
+  );
 
   const [showForm, setShowForm] = useState(false);
   const [opType, setOpType] = useState('');
   const [briefer, setBriefer] = useState('');
   const [content, setContent] = useState('');
+  const [selectedWorkFaceIds, setSelectedWorkFaceIds] = useState<string[]>([]);
 
   const requiredOps = meeting?.dangerous_ops ?? [];
   const doneOps = list.map((b) => b.op_type);
@@ -50,16 +67,32 @@ export default function BriefingPage() {
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (!meeting || !opType || !briefer.trim() || !content.trim()) return;
-    add({ meeting_id: meeting.id, op_type: opType, briefer: briefer.trim(), content: content.trim() });
+    add({
+      meeting_id: meeting.id,
+      op_type: opType,
+      briefer: briefer.trim(),
+      content: content.trim(),
+      work_face_ids: selectedWorkFaceIds.length > 0 ? selectedWorkFaceIds : undefined,
+    });
     setShowForm(false);
     setOpType('');
     setBriefer('');
     setContent('');
+    setSelectedWorkFaceIds([]);
   };
 
   const toggleWorker = (briefingId: string, workerId: string) => {
     if (hasConfirmed(briefingId, workerId)) unconfirm(briefingId, workerId);
     else confirm(briefingId, workerId);
+  };
+
+  const handleBindHazard = (briefingId: string, hazardId: string) => {
+    bindHazard(briefingId, hazardId);
+    hazardBindBriefing(hazardId, briefingId);
+  };
+
+  const handleUnbindHazard = (briefingId: string, hazardId: string) => {
+    unbindHazard(briefingId, hazardId);
   };
 
   const allCompleted = useMemo(() => {
@@ -173,6 +206,39 @@ export default function BriefingPage() {
               />
             </div>
             <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                <MapPin className="w-4 h-4 inline mr-1" />
+                关联作业面
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {workFaces.map((wf) => {
+                  const active = selectedWorkFaceIds.includes(wf.id);
+                  return (
+                    <button
+                      type="button"
+                      key={wf.id}
+                      onClick={() =>
+                        setSelectedWorkFaceIds((prev) =>
+                          active ? prev.filter((id) => id !== wf.id) : [...prev, wf.id],
+                        )
+                      }
+                      className={`px-3 py-2 rounded-lg border-2 text-sm font-semibold transition ${
+                        active
+                          ? 'border-purple-500 bg-purple-50 text-purple-700'
+                          : 'border-slate-200 text-slate-600 hover:border-purple-300'
+                      }`}
+                    >
+                      {wf.name}
+                      {wf.location && <span className="ml-1 text-xs text-slate-400">({wf.location})</span>}
+                    </button>
+                  );
+                })}
+                {workFaces.length === 0 && (
+                  <p className="text-sm text-slate-400">暂无作业面数据</p>
+                )}
+              </div>
+            </div>
+            <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1.5">交底内容</label>
               <textarea
                 required
@@ -184,7 +250,7 @@ export default function BriefingPage() {
               />
             </div>
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setShowForm(false)} className="px-5 py-2.5 rounded-lg border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">取消</button>
+              <button type="button" onClick={() => { setShowForm(false); setSelectedWorkFaceIds([]); }} className="px-5 py-2.5 rounded-lg border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">取消</button>
               <button type="submit" className="inline-flex items-center gap-2 px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg shadow-md transition-all">
                 <FileText className="w-5 h-5" />提交交底
               </button>
@@ -209,6 +275,10 @@ export default function BriefingPage() {
               getConfirmed={getConfirmedWorkers}
               onToggle={toggleWorker}
               onRemove={() => remove(b.id)}
+              onBindHazard={handleBindHazard}
+              onUnbindHazard={handleUnbindHazard}
+              meetingHazards={meetingHazards}
+              workFaces={workFaces}
             />
           ))}
         </div>
@@ -225,6 +295,10 @@ function BriefingCard({
   getConfirmed,
   onToggle,
   onRemove,
+  onBindHazard,
+  onUnbindHazard,
+  meetingHazards,
+  workFaces,
 }: {
   briefing: Briefing;
   workers: any[];
@@ -233,11 +307,22 @@ function BriefingCard({
   getConfirmed: (bid: string) => any[];
   onToggle: (bid: string, wid: string) => void;
   onRemove: () => void;
+  onBindHazard: (briefingId: string, hazardId: string) => void;
+  onUnbindHazard: (briefingId: string, hazardId: string) => void;
+  meetingHazards: { id: string; title: string; level: string }[];
+  workFaces: { id: string; name: string; location: string }[];
 }) {
+  const [showHazardPicker, setShowHazardPicker] = useState(false);
   const label = OPS_MAP[briefing.op_type]?.label ?? briefing.op_type;
   const confirmed = getConfirmed(briefing.id);
   const rate = workers.length > 0 ? Math.round((confirmed.length / workers.length) * 100) : 0;
   const full = confirmed.length === workers.length && workers.length > 0;
+
+  const linkedHazardIds = briefing.hazard_ids ?? [];
+  const linkedHazards = meetingHazards.filter((h) => linkedHazardIds.includes(h.id));
+  const unlinkedHazards = meetingHazards.filter((h) => !linkedHazardIds.includes(h.id));
+
+  const briefingWorkFaces = workFaces.filter((wf) => (briefing.work_face_ids ?? []).includes(wf.id));
 
   return (
     <div className="bg-white rounded-xl shadow-md overflow-hidden animate-slide-in" style={{ animationDelay: `${index * 60}ms` }}>
@@ -262,6 +347,16 @@ function BriefingCard({
               <span className="mx-2">·</span>
               已签字：<span className="font-bold text-purple-700">{confirmed.length} / {workers.length}</span>
             </p>
+            {briefingWorkFaces.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1.5">
+                <MapPin className="w-3.5 h-3.5 text-slate-400 mt-0.5" />
+                {briefingWorkFaces.map((wf) => (
+                  <span key={wf.id} className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600 text-xs font-medium border border-indigo-200">
+                    {wf.name}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
         <button onClick={onRemove} className="p-1.5 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50">
@@ -277,6 +372,61 @@ function BriefingCard({
             {briefing.content}
           </pre>
         </details>
+
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-semibold text-slate-700 inline-flex items-center gap-1.5">
+              <Link2 className="w-4 h-4 text-orange-500" />
+              关联隐患 ({linkedHazards.length})
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowHazardPicker(!showHazardPicker)}
+              className="px-3 py-1 rounded-md text-xs font-semibold bg-orange-50 text-orange-700 hover:bg-orange-100 inline-flex items-center gap-1 transition"
+            >
+              <Link2 className="w-3.5 h-3.5" />
+              {showHazardPicker ? '收起' : '绑定隐患'}
+            </button>
+          </div>
+          {linkedHazards.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-2">
+              {linkedHazards.map((h) => (
+                <span
+                  key={h.id}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200"
+                >
+                  {h.title}
+                  <button
+                    type="button"
+                    onClick={() => onUnbindHazard(briefing.id, h.id)}
+                    className="ml-0.5 p-0.5 rounded hover:bg-orange-200"
+                  >
+                    <Unlink className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          {showHazardPicker && (
+            <div className="bg-orange-50/50 border border-orange-200 rounded-lg p-3 space-y-2">
+              {unlinkedHazards.length > 0 ? (
+                unlinkedHazards.map((h) => (
+                  <button
+                    key={h.id}
+                    type="button"
+                    onClick={() => onBindHazard(briefing.id, h.id)}
+                    className="w-full text-left px-3 py-2 rounded-md border border-slate-200 bg-white hover:bg-orange-50 text-sm transition flex items-center justify-between"
+                  >
+                    <span className="font-medium text-slate-700">{h.title}</span>
+                    <Link2 className="w-4 h-4 text-orange-400" />
+                  </button>
+                ))
+              ) : (
+                <p className="text-xs text-slate-400 text-center py-2">当前晨会无更多可绑定隐患</p>
+              )}
+            </div>
+          )}
+        </div>
 
         <div>
           <div className="flex items-center justify-between mb-3">

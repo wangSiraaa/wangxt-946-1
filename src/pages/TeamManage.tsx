@@ -1,10 +1,14 @@
 import { useState } from 'react';
-import { Users, UserPlus, Plus, Trash2, Edit3, Save, X, HardHat } from 'lucide-react';
+import { Users, UserPlus, Plus, Trash2, Edit3, Save, X, HardHat, ArrowRightLeft, Check, XCircle, Clock } from 'lucide-react';
 import { useTeamStore } from '@/stores/team';
 import { useSignInStore } from '@/stores/signIn';
 import { useMeetingStore } from '@/stores/meeting';
+import { useTransferStore } from '@/stores/transfer';
+import { useWorkFaceStore } from '@/stores/workFace';
 import { EmptyState } from '@/components/common/EmptyState';
-import { WORK_TYPES, type Team, type Worker } from '@/types';
+import { StatusBadge } from '@/components/common/StatusBadge';
+import { WORK_TYPES, type Team, type Worker, type TransferRequest } from '@/types';
+import { formatDate } from '@/utils/date';
 
 interface TeamForm {
   id?: string;
@@ -20,6 +24,12 @@ interface WorkerForm {
   id_card: string;
   phone: string;
 }
+interface TransferForm {
+  worker_id: string;
+  to_team_id: string;
+  reason: string;
+  work_face_id: string;
+}
 
 const AVATAR_POOL = ['👷', '👷‍♂️', '👷‍♀️', '🧑‍🏭', '👨‍🔧', '🧔', '👨‍🦱', '👩‍🦰', '🧑', '👨‍🦳', '👩', '🧓'];
 
@@ -32,12 +42,25 @@ export default function TeamManage() {
   const addWorker = useTeamStore((s) => s.addWorker);
   const updateWorker = useTeamStore((s) => s.updateWorker);
   const deleteWorker = useTeamStore((s) => s.deleteWorker);
+  const getTeamById = useTeamStore((s) => s.getTeamById);
+  const getWorkerById = useTeamStore((s) => s.getWorkerById);
   const meetings = useMeetingStore((s) => s.meetings);
   const signIns = useSignInStore((s) => s.signIns);
+
+  const transfers = useTransferStore((s) => s.transfers);
+  const createTransfer = useTransferStore((s) => s.createTransfer);
+  const approveTransfer = useTransferStore((s) => s.approveTransfer);
+  const rejectTransfer = useTransferStore((s) => s.rejectTransfer);
+  const cancelTransfer = useTransferStore((s) => s.cancelTransfer);
+
+  const workFaces = useWorkFaceStore((s) => s.workFaces);
+  const getWorkFaceById = useWorkFaceStore((s) => s.getWorkFaceById);
 
   const [teamModal, setTeamModal] = useState<TeamForm | null>(null);
   const [workerModal, setWorkerModal] = useState<WorkerForm | null>(null);
   const [activeTeamId, setActiveTeamId] = useState<string | null>(teams[0]?.id ?? null);
+  const [transferForm, setTransferForm] = useState<TransferForm>({ worker_id: '', to_team_id: '', reason: '', work_face_id: '' });
+  const [transferTab, setTransferTab] = useState<'form' | 'pending' | 'history'>('form');
 
   const pickAvatar = () => AVATAR_POOL[Math.floor(Math.random() * AVATAR_POOL.length)];
 
@@ -71,7 +94,7 @@ export default function TeamManage() {
   };
 
   const safeDeleteTeam = (t: Team) => {
-    const related = meetings.filter((m) => m.team_id === t.id);
+    const related = meetings.filter((m) => m.team_ids.includes(t.id));
     if (related.length > 0) {
       if (!confirm(`该班组关联 ${related.length} 次晨会，删除后工人档案也会移除，是否确认删除？`)) return;
     } else {
@@ -87,7 +110,37 @@ export default function TeamManage() {
     deleteWorker(w.id);
   };
 
+  const submitTransfer = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!transferForm.worker_id || !transferForm.to_team_id || !transferForm.reason.trim()) return;
+    const worker = getWorkerById(transferForm.worker_id);
+    if (!worker) return;
+    createTransfer({
+      date: formatDate(new Date()),
+      from_team_id: worker.team_id,
+      to_team_id: transferForm.to_team_id,
+      worker_id: transferForm.worker_id,
+      reason: transferForm.reason,
+      work_face_id: transferForm.work_face_id || undefined,
+      status: 'pending',
+      requester: '班组长',
+    });
+    setTransferForm({ worker_id: '', to_team_id: '', reason: '', work_face_id: '' });
+  };
+
   const activeWorkers = workers.filter((w) => w.team_id === activeTeamId);
+
+  const pendingTransfers = transfers.filter((t) => t.status === 'pending');
+  const historyTransfers = transfers.filter((t) => t.status !== 'pending');
+
+  const transferStatusBadge = (status: TransferRequest['status']) => {
+    switch (status) {
+      case 'pending': return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 text-amber-700 border border-amber-300 text-xs font-semibold"><Clock className="w-3 h-3" />待审批</span>;
+      case 'approved': return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-green-100 text-green-700 border border-green-300 text-xs font-semibold"><Check className="w-3 h-3" />已通过</span>;
+      case 'rejected': return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-100 text-red-700 border border-red-300 text-xs font-semibold"><XCircle className="w-3 h-3" />已驳回</span>;
+      case 'cancelled': return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-300 text-xs font-semibold">已取消</span>;
+    }
+  };
 
   return (
     <div className="space-y-6 animate-slide-in">
@@ -224,6 +277,193 @@ export default function TeamManage() {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-md p-5">
+        <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+          <div className="w-1 h-5 bg-purple-500 rounded-full" />
+          <ArrowRightLeft className="w-5 h-5 text-purple-500" />
+          跨班组调人
+        </h3>
+
+        <div className="flex gap-2 mb-4">
+          {(['form', 'pending', 'history'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setTransferTab(tab)}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
+                transferTab === tab
+                  ? 'bg-purple-500 text-white shadow-md'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {tab === 'form' ? `申请调人${pendingTransfers.length > 0 ? '' : ''}` : tab === 'pending' ? `待审批 (${pendingTransfers.length})` : '历史记录'}
+            </button>
+          ))}
+        </div>
+
+        {transferTab === 'form' && (
+          <form onSubmit={submitTransfer} className="space-y-4 max-w-2xl">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">选择工人 *</label>
+                <select
+                  required
+                  value={transferForm.worker_id}
+                  onChange={(e) => setTransferForm({ ...transferForm, worker_id: e.target.value })}
+                  className="field-input bg-white"
+                >
+                  <option value="">-- 选择工人 --</option>
+                  {workers.map((w) => (
+                    <option key={w.id} value={w.id}>{w.name} ({getTeamById(w.team_id)?.name ?? '未知班组'})</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">目标班组 *</label>
+                <select
+                  required
+                  value={transferForm.to_team_id}
+                  onChange={(e) => setTransferForm({ ...transferForm, to_team_id: e.target.value })}
+                  className="field-input bg-white"
+                >
+                  <option value="">-- 选择目标班组 --</option>
+                  {teams
+                    .filter((t) => {
+                      const w = getWorkerById(transferForm.worker_id);
+                      return !w || t.id !== w.team_id;
+                    })
+                    .map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">作业面</label>
+                <select
+                  value={transferForm.work_face_id}
+                  onChange={(e) => setTransferForm({ ...transferForm, work_face_id: e.target.value })}
+                  className="field-input bg-white"
+                >
+                  <option value="">-- 选择作业面（可选） --</option>
+                  {workFaces.map((wf) => (
+                    <option key={wf.id} value={wf.id}>{wf.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">调人原因 *</label>
+                <input
+                  required
+                  value={transferForm.reason}
+                  onChange={(e) => setTransferForm({ ...transferForm, reason: e.target.value })}
+                  className="field-input"
+                  placeholder="例：临时支援浇筑作业"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-purple-500 hover:bg-purple-600 text-white font-bold rounded-lg shadow-md transition-all"
+              >
+                <ArrowRightLeft className="w-4 h-4" />提交调人申请
+              </button>
+            </div>
+          </form>
+        )}
+
+        {transferTab === 'pending' && (
+          pendingTransfers.length === 0 ? (
+            <EmptyState icon={<Clock className="w-8 h-8 text-amber-300" />} title="暂无待审批申请" description="所有调人申请已处理" />
+          ) : (
+            <div className="space-y-3">
+              {pendingTransfers.map((tr) => {
+                const worker = getWorkerById(tr.worker_id);
+                const fromTeam = getTeamById(tr.from_team_id);
+                const toTeam = getTeamById(tr.to_team_id);
+                const wf = tr.work_face_id ? getWorkFaceById(tr.work_face_id) : undefined;
+                return (
+                  <div key={tr.id} className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 animate-slide-in">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="font-bold text-slate-800">{worker?.name ?? tr.worker_id}</span>
+                          <ArrowRightLeft className="w-4 h-4 text-purple-500" />
+                          <span className="text-sm text-slate-600">{fromTeam?.name ?? '?'} → {toTeam?.name ?? '?'}</span>
+                          {transferStatusBadge(tr.status)}
+                        </div>
+                        <p className="text-sm text-slate-600 mb-1">原因：{tr.reason}</p>
+                        {wf && <p className="text-xs text-slate-500">作业面：{wf.name}</p>}
+                        <p className="text-xs text-slate-400 mt-1">申请时间：{new Date(tr.created_at).toLocaleString('zh-CN')}</p>
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <button
+                          onClick={() => approveTransfer(tr.id, '安全员')}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white text-sm font-semibold rounded-lg shadow-sm transition"
+                        >
+                          <Check className="w-4 h-4" />通过
+                        </button>
+                        <button
+                          onClick={() => rejectTransfer(tr.id, '安全员')}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-sm font-semibold rounded-lg shadow-sm transition"
+                        >
+                          <XCircle className="w-4 h-4" />驳回
+                        </button>
+                        <button
+                          onClick={() => cancelTransfer(tr.id)}
+                          className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-600 text-sm font-semibold rounded-lg transition"
+                        >
+                          取消
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )
+        )}
+
+        {transferTab === 'history' && (
+          historyTransfers.length === 0 ? (
+            <EmptyState icon={<ArrowRightLeft className="w-8 h-8 text-slate-300" />} title="暂无调人记录" description="已审批的调人申请将在此显示" />
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-700">
+                    <th className="px-4 py-2.5 text-left font-semibold">工人</th>
+                    <th className="px-4 py-2.5 text-left font-semibold">原班组</th>
+                    <th className="px-4 py-2.5 text-left font-semibold">目标班组</th>
+                    <th className="px-4 py-2.5 text-left font-semibold">原因</th>
+                    <th className="px-4 py-2.5 text-left font-semibold">状态</th>
+                    <th className="px-4 py-2.5 text-left font-semibold">时间</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {historyTransfers.map((tr) => {
+                    const worker = getWorkerById(tr.worker_id);
+                    const fromTeam = getTeamById(tr.from_team_id);
+                    const toTeam = getTeamById(tr.to_team_id);
+                    return (
+                      <tr key={tr.id} className="border-t border-slate-100 hover:bg-slate-50">
+                        <td className="px-4 py-2.5 font-medium text-slate-800">{worker?.name ?? tr.worker_id}</td>
+                        <td className="px-4 py-2.5 text-slate-600">{fromTeam?.name ?? '?'}</td>
+                        <td className="px-4 py-2.5 text-slate-600">{toTeam?.name ?? '?'}</td>
+                        <td className="px-4 py-2.5 text-slate-600 text-xs max-w-[200px] truncate">{tr.reason}</td>
+                        <td className="px-4 py-2.5">{transferStatusBadge(tr.status)}</td>
+                        <td className="px-4 py-2.5 text-xs text-slate-400">{tr.approved_at ? new Date(tr.approved_at).toLocaleString('zh-CN') : new Date(tr.created_at).toLocaleString('zh-CN')}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )
+        )}
       </div>
 
       {teamModal && (

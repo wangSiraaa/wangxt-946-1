@@ -1,6 +1,8 @@
-import { Users, UserCheck, UserX, AlertTriangle, ShieldCheck, ClipboardCheck } from 'lucide-react';
+import { Users, UserCheck, UserX, AlertTriangle, ShieldCheck, ClipboardCheck, PenLine } from 'lucide-react';
 import type { SignIn, Worker, WorkStatus, Meeting } from '@/types';
 import { StatusBadge } from '@/components/common/StatusBadge';
+import { useTeamStore } from '@/stores/team';
+import { useWorkFaceStore } from '@/stores/workFace';
 
 interface Props {
   workers: Worker[];
@@ -16,6 +18,9 @@ function timeStr(iso?: string): string {
 }
 
 export function SignInTable({ workers, signIns, workStatuses, meeting }: Props) {
+  const getTeamById = useTeamStore((s) => s.getTeamById);
+  const getWorkFaceById = useWorkFaceStore((s) => s.getWorkFaceById);
+
   if (workers.length === 0) {
     return (
       <div className="py-14 text-center text-slate-400">
@@ -38,9 +43,12 @@ export function SignInTable({ workers, signIns, workStatuses, meeting }: Props) 
           <tr className="bg-[#1E3A5F] text-white">
             <th className="px-4 py-3 text-left font-semibold w-12">#</th>
             <th className="px-4 py-3 text-left font-semibold">工人</th>
-            <th className="px-4 py-3 text-left font-semibold">工种</th>
+            <th className="px-4 py-3 text-left font-semibold">班组</th>
+            <th className="px-4 py-3 text-left font-semibold">作业面</th>
             <th className="px-4 py-3 text-left font-semibold">签到时间</th>
             <th className="px-4 py-3 text-left font-semibold">签到状态</th>
+            <th className="px-4 py-3 text-left font-semibold">补签</th>
+            <th className="px-4 py-3 text-left font-semibold">复核状态</th>
             <th className="px-4 py-3 text-left font-semibold">迟到</th>
             <th className="px-4 py-3 text-left font-semibold">上岗状态</th>
           </tr>
@@ -49,6 +57,9 @@ export function SignInTable({ workers, signIns, workStatuses, meeting }: Props) 
           {rows.map(({ worker, signIn, workStatus, idx }) => {
             const signStatus = signIn?.status ?? 'absent';
             const highlight = signStatus !== 'normal';
+            const teamName = signIn ? (getTeamById(signIn.team_id)?.name ?? getTeamById(worker.team_id)?.name ?? '-') : (getTeamById(worker.team_id)?.name ?? '-');
+            const workFaceName = signIn?.work_face_id ? (getWorkFaceById(signIn.work_face_id)?.name ?? '-') : '-';
+            const reviewStatus = signIn?.review_status ?? 'not_required';
             return (
               <tr
                 key={worker.id}
@@ -69,14 +80,23 @@ export function SignInTable({ workers, signIns, workStatuses, meeting }: Props) 
                     </div>
                   </div>
                 </td>
-                <td className="px-4 py-3">
-                  <span className="inline-flex px-2 py-0.5 rounded bg-[#1E3A5F]/10 text-[#1E3A5F] text-xs font-medium">
-                    {worker.work_type}
-                  </span>
-                </td>
+                <td className="px-4 py-3 text-slate-700 text-xs font-medium">{teamName}</td>
+                <td className="px-4 py-3 text-slate-700 text-xs">{workFaceName}</td>
                 <td className="px-4 py-3 font-mono-num text-slate-600">{timeStr(signIn?.sign_time)}</td>
                 <td className="px-4 py-3">
                   <StatusBadge status={signStatus} type="signin" />
+                </td>
+                <td className="px-4 py-3">
+                  {signIn?.is_makeup ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-100 text-purple-700 border border-purple-300 text-xs font-semibold">
+                      <PenLine className="w-3 h-3" />补签
+                    </span>
+                  ) : (
+                    <span className="text-slate-300 text-xs">-</span>
+                  )}
+                </td>
+                <td className="px-4 py-3">
+                  <StatusBadge status={reviewStatus} type="signin-review" />
                 </td>
                 <td className="px-4 py-3">
                   {signIn && signStatus === 'late' ? (
